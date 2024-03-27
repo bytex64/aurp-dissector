@@ -18,7 +18,7 @@ aurp_version = ProtoField.uint16("aurp.version", "Version")
 aurp_reserved = ProtoField.uint16("aurp.reserved", "Reserved")
 aurp_type = ProtoField.uint16("aurp.type", "Type")
 
-aurp_connection_id = ProtoField.uint16("aurp.connection_id", "Connection ID")
+aurp_connection_id = ProtoField.uint16("aurp.connection_id", "Connection ID", base.HEX)
 aurp_sequence_no = ProtoField.uint16("aurp.sequence_no", "Sequence no.")
 aurp_command = ProtoField.uint16("aurp.command", "Command code")
 aurp_flags            = ProtoField.uint16("aurp.flags", "Flags", base.HEX)
@@ -268,11 +268,14 @@ function parse_command_ri_resp(buffer, tree)
       tuple_tree = subtree:add(network_tuple, buffer(c, 6))
       tuple_tree:add(network_tuple_range_start, buffer(c, 2))
       tuple_tree:add(network_tuple_range_end, buffer(c + 3, 2))
-      tuple_tree:append_text(" (" .. buffer(c, 2):uint() .. "-" .. buffer(c + 3, 2):uint() .. ")")
+      local n_start = buffer(c, 2):uint()
+      local n_end = buffer(c + 3, 2):uint()
+      tuple_tree:append_text(string.format(" range %d-%d ($%04x-$%04x)", n_start, n_end, n_start, n_end))
     else
       tuple_tree = subtree:add(network_tuple, buffer(c, 3))
       tuple_tree:add(network_tuple_network_number, buffer(c, 2))
-      tuple_tree:append_text(" (" .. buffer(c, 2):uint() .. ")")
+      local n_number = buffer(c, 2):uint()
+      tuple_tree:append_text(string.format(" %d ($%04x)", n_number, n_number))
     end
     tuple_tree:add(network_tuple_range_flag, buffer(c + 2, 1))
     tuple_tree:add(network_tuple_distance, buffer(c + 2, 1))
@@ -311,7 +314,7 @@ function parse_command_zone_info_resp(buffer, tree)
       local tuple_tree = subtree:add(zone_tuple, buffer(c, len))
       tuple_tree:add(zone_tuple_network_number, buffer(c, 2))
       local zone_network_number = buffer(c, 2):uint()
-      tuple_tree:append_text(" (" .. zone_network_number .. " - ")
+      tuple_tree:append_text(string.format(" %d ($%04x) - ", zone_network_number, zone_network_number))
       tuple_tree:add(zone_tuple_long, buffer(c + 2, 1))
 
       if long then
@@ -328,7 +331,6 @@ function parse_command_zone_info_resp(buffer, tree)
         local zone_name = buffer(7 + offset, zone_name_length):string(base.ASCII)
         tuple_tree:append_text(zone_name)
       end
-      tuple_tree:append_text(")")
       c = c + len
       print(c, buffer:len())
     end
@@ -399,13 +401,18 @@ function aurp_protocol.dissector(buffer, pinfo, tree)
     return
   end
 
+  local connection_id = buffer(c, 2):uint()
   subtree:add(aurp_connection_id, buffer(c, 2))
   c = c + 2
+
+  local sequence_no = buffer(c, 2):uint()
   subtree:add(aurp_sequence_no, buffer(c, 2))
   c = c + 2
+
   local command = buffer(c, 2):uint()
   local command_tree = subtree:add(aurp_command, buffer(c, 2))
   c = c + 2
+
   parse_flags(buffer(c, 2), command, subtree)
   c = c + 2
 
@@ -428,7 +435,9 @@ function aurp_protocol.dissector(buffer, pinfo, tree)
   -- command 14 is Tickle (no subfields)
   -- command 15 is Tickle Acknowledgement (no subfields)
   end
-  command_tree:append_text(" (" .. command_name(command, subcommand) .. ")")
+  local command_name = command_name(command, subcommand)
+  command_tree:append_text(" (" .. command_name .. ")")
+  pinfo.columns["info"] = string.format("[%04x seq %d] %s", connection_id, sequence_no, command_name)
 end
 
 local udp_port = DissectorTable.get("udp.port")
