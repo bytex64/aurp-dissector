@@ -36,7 +36,7 @@ aurp_flags_szi        = ProtoField.bool("aurp.flags.szi", "Send zone information
 -- Routing Information Request is absent as it has no subfields
 
 -- Routing Information Response
-aurp_ri_resp = ProtoField.none("aurp.ri_resp", "Routing Information Response")
+aurp_ri_rsp = ProtoField.none("aurp.ri_rsp", "Routing Information Response")
 network_tuple = ProtoField.none("aurp.network_tuple", "Network")
 network_tuple_network_number = ProtoField.uint16("aurp_network_tuple.network_number", "Network number")
 network_tuple_range_flag = ProtoField.bool("aurp_network_tuple.range", "Range", 8, flag_text_set, 0x80)
@@ -55,9 +55,9 @@ aurp_router_down_error_code = ProtoField.int16("aurp.router_down", "Error Code")
 -- Zone Information Request
 
 -- Zone Information Response
-aurp_zone_info_resp            = ProtoField.none("aurp.zone_info_resp", "Zone Information Response")
-aurp_zone_info_subcode         = ProtoField.uint16("aurp.zone_info_resp.subcode", "Subcode")
-aurp_zone_info_resp_num_tuples = ProtoField.uint16("aurp.zone_info_resp.num_tuples", "Number of zone tuples")
+aurp_zone_info_rsp            = ProtoField.none("aurp.zone_info_rsp", "Zone Information Response")
+aurp_zone_info_subcode         = ProtoField.uint16("aurp.zone_info_rsp.subcode", "Subcode")
+aurp_zone_info_rsp_num_tuples = ProtoField.uint16("aurp.zone_info_rsp.num_tuples", "Number of zone tuples")
 zone_tuple                = ProtoField.none("aurp.zone_tuple", "Zone")
 zone_tuple_network_number = ProtoField.uint16("aurp.zone_tuple.network_number", "Network number")
 zone_tuple_long           = ProtoField.bool("aurp.zone_tuple.long", "Long tuple", 8, flag_text_set, 0x80)
@@ -80,11 +80,11 @@ aurp_open_req_option_count = ProtoField.uint8("aurp.open_req.option_count", "Opt
 aurp_open_req_option       = ProtoField.uint8("aurp.open_req.option", "Option")
 
 -- Open Response
-aurp_open_resp              = ProtoField.none("aurp.open_resp", "Open Response")
-aurp_open_resp_update_rate  = ProtoField.int16("aurp.open_resp.update_rate", "Update rate")
-aurp_open_resp_error_code   = ProtoField.int16("aurp.open_resp.error_code", "Error code")
-aurp_open_resp_option_count = ProtoField.uint8("aurp.open_resp.option_count", "Option count")
-aurp_open_resp_option       = ProtoField.uint8("aurp.open_resp.option", "Option")
+aurp_open_rsp              = ProtoField.none("aurp.open_rsp", "Open Response")
+aurp_open_rsp_update_rate  = ProtoField.int16("aurp.open_rsp.update_rate", "Update rate")
+aurp_open_rsp_error_code   = ProtoField.int16("aurp.open_rsp.error_code", "Error code")
+aurp_open_rsp_option_count = ProtoField.uint8("aurp.open_rsp.option_count", "Option count")
+aurp_open_rsp_option       = ProtoField.uint8("aurp.open_rsp.option", "Option")
 
 -- Tickle
 
@@ -114,7 +114,7 @@ aurp_protocol.fields = {
   aurp_flags_reserved2,
   aurp_flags_szi,
 
-  aurp_ri_resp,
+  aurp_ri_rsp,
   network_tuple,
   network_tuple_network_number,
   network_tuple_range_flag,
@@ -125,9 +125,9 @@ aurp_protocol.fields = {
   aurp_router_down,
   aurp_router_down_error_code,
 
-  aurp_zone_info_resp,
+  aurp_zone_info_rsp,
   aurp_zone_info_subcode,
-  aurp_zone_info_resp_num_tuples,
+  aurp_zone_info_rsp_num_tuples,
   zone_tuple,
   zone_tuple_network_number,
   zone_tuple_long,
@@ -140,11 +140,11 @@ aurp_protocol.fields = {
   aurp_open_req_option_count,
   aurp_open_req_option,
 
-  aurp_open_resp,
-  aurp_open_resp_update_rate,
-  aurp_open_resp_error_code,
-  aurp_open_resp_option_count,
-  aurp_open_resp_option,
+  aurp_open_rsp,
+  aurp_open_rsp_update_rate,
+  aurp_open_rsp_error_code,
+  aurp_open_rsp_option_count,
+  aurp_open_rsp_option,
 }
 
 error_codes = {
@@ -255,8 +255,8 @@ function command_name(code, subcode)
   return name
 end
 
-function parse_command_ri_resp(buffer, tree)
-  local subtree = tree:add(aurp_ri_resp, buffer)
+function parse_command_ri_rsp(buffer, tree)
+  local subtree = tree:add(aurp_ri_rsp, buffer)
   if buffer:len() == 0 then
     subtree:append_text(" (empty)")
     return
@@ -294,13 +294,13 @@ function parse_command_router_down(buffer, tree)
   subtree:add(aurp_router_down_error_code, buffer):append_text(" (" .. error_code(code) .. ")")
 end
 
-function parse_command_zone_info_resp(buffer, tree)
+function parse_command_zone_info_rsp(buffer, tree)
   local subcode = buffer(0, 2):uint()
 
   if subcode == 1 or subcode == 2 then
-    local subtree = tree:add(aurp_zone_info_resp, buffer)
+    local subtree = tree:add(aurp_zone_info_rsp, buffer)
     subtree:add(aurp_zone_info_subcode, buffer(0, 2))
-    subtree:add(aurp_zone_info_resp_num_tuples, buffer(2, 2))
+    subtree:add(aurp_zone_info_rsp_num_tuples, buffer(2, 2))
 
     local c = 4
     while c < buffer:len() do
@@ -348,21 +348,21 @@ function parse_command_open_req(buffer, tree)
   end
 end
 
-function parse_command_open_resp(buffer, tree)
-  local subtree = tree:add(aurp_open_resp, buffer)
+function parse_command_open_rsp(buffer, tree)
+  local subtree = tree:add(aurp_open_rsp, buffer)
   local rate_or_error = buffer(0, 2):int()
   if rate_or_error >= 0 then
-    subtree:add(aurp_open_resp_update_rate, buffer(0, 2))
+    subtree:add(aurp_open_rsp_update_rate, buffer(0, 2))
       :append_text(" (" .. (rate_or_error * 10) .. " seconds)")
   else
-    subtree:add(aurp_open_resp_error_code, buffer(0, 2))
+    subtree:add(aurp_open_rsp_error_code, buffer(0, 2))
       :append_text(" (" .. error_code(rate_or_error) .. ")")
   end
 
-  subtree:add(aurp_open_resp_option_count, buffer(2, 1))
+  subtree:add(aurp_open_rsp_option_count, buffer(2, 1))
   local option_count = buffer(2, 1):uint()
   for i = 1, option_count do
-    subtree:add(aurp_open_resp_option, buffer(i + 2, 1))
+    subtree:add(aurp_open_rsp_option, buffer(i + 2, 1))
   end
 end
 
@@ -426,7 +426,7 @@ function aurp_protocol.dissector(buffer, pinfo, tree)
   local subcommand
   -- command 1 is RI-Req (no subfields)
   if command == 2 then
-    parse_command_ri_resp(buffer(c), subtree)
+    parse_command_ri_rsp(buffer(c), subtree)
   -- command 3 is RI-Ack (no subfields)
   elseif command == 5 then
     parse_command_router_down(buffer(c), subtree)
@@ -434,11 +434,11 @@ function aurp_protocol.dissector(buffer, pinfo, tree)
     subcommand = buffer(c, 2):uint()
   elseif command == 7 then
     subcommand = buffer(c, 2):uint()
-    parse_command_zone_info_resp(buffer(c), subtree)
+    parse_command_zone_info_rsp(buffer(c), subtree)
   elseif command == 8 then
     parse_command_open_req(buffer(c), subtree)
   elseif command == 9 then
-    parse_command_open_resp(buffer(c), subtree)
+    parse_command_open_rsp(buffer(c), subtree)
   -- command 14 is Tickle (no subfields)
   -- command 15 is Tickle Acknowledgement (no subfields)
   end
