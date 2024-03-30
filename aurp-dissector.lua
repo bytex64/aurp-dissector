@@ -98,6 +98,7 @@ aurp_protocol.fields = {
   aurp_version,
   aurp_reserved,
   aurp_type,
+
   aurp_connection_id,
   aurp_sequence_no,
   aurp_command,
@@ -394,10 +395,16 @@ function aurp_protocol.dissector(buffer, pinfo, tree)
     stype = "Unknown"
   end
   subtree:add(aurp_type, buffer(c, 2)):append_text(" (" .. stype .. ")")
-  c  = c + 2
+  c = c + 2
 
-  if atype ~= 3 then
-    subtree:add_expert_info(PI_UNDECODED, PI_NOTE, "Non-AURP packet")
+  if atype == 2 then
+    subtree:set_len(c)
+    local ddp = Dissector.get("ddp")
+    ddp:call(buffer(c):tvb(), pinfo, tree)
+    return
+  elseif atype ~= 3 then
+    subtree:set_len(c)
+    subtree:add_expert_info(PI_UNDECODED, PI_NOTE, "Unknown packet type")
     return
   end
 
