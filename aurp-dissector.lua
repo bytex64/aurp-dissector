@@ -38,15 +38,21 @@ aurp_flags_szi        = ProtoField.bool("aurp.flags.szi", "Send zone information
 -- Routing Information Response
 aurp_ri_rsp = ProtoField.none("aurp.ri_rsp", "Routing Information Response")
 network_tuple = ProtoField.none("aurp.network_tuple", "Network")
-network_tuple_network_number = ProtoField.uint16("aurp_network_tuple.network_number", "Network number")
-network_tuple_range_flag = ProtoField.bool("aurp_network_tuple.range", "Range", 8, flag_text_set, 0x80)
+network_tuple_network = ProtoField.uint16("aurp_network_tuple.network", "Network number")
+network_tuple_range_flag = ProtoField.bool("aurp_network_tuple.is_range", "Range", 8, flag_text_set, 0x80)
 network_tuple_distance = ProtoField.uint8("aurp_network_tuple.distance", "Distance", nil, nil, 0x1F)
-network_tuple_range_start = ProtoField.uint16("aurp_network_tuple.start", "Range start")
-network_tuple_range_end = ProtoField.uint16("aurp_network_tuple.end", "Range end")
+network_tuple_network_range_end = ProtoField.uint16("aurp_network_tuple.network_end", "Network range end")
 
 -- Routing Information Acknowledgement is absent as it has no subfields
 
 -- Routing Information Update
+aurp_ri_upd = ProtoField.none("aurp.ri_upd", "Routing Information Update")
+network_event_tuple = ProtoField.none("aurp_network_event", "Network Event")
+network_event_tuple_code = ProtoField.uint8("aurp_network_event.code", "Event code")
+network_event_tuple_network = ProtoField.uint8("aurp_network_event.network", "Network number")
+network_event_range_flag = ProtoField.uint8("aurp_network_event.is_range", "Distance", nil, nil, 0x80)
+network_event_tuple_distance = ProtoField.uint8("aurp_network_event.distance", "Distance", nil, nil, 0x7F)
+network_event_tuple_network_range_end = ProtoField.uint16("aurp_network_tuple.network_end", "Network range end")
 
 -- Router Down
 aurp_router_down            = ProtoField.none("aurp.router_down", "Router Down")
@@ -59,7 +65,7 @@ aurp_zone_info_rsp            = ProtoField.none("aurp.zone_info_rsp", "Zone Info
 aurp_zone_info_subcode         = ProtoField.uint16("aurp.zone_info_rsp.subcode", "Subcode")
 aurp_zone_info_rsp_num_tuples = ProtoField.uint16("aurp.zone_info_rsp.num_tuples", "Number of zone tuples")
 zone_tuple                = ProtoField.none("aurp.zone_tuple", "Zone")
-zone_tuple_network_number = ProtoField.uint16("aurp.zone_tuple.network_number", "Network number")
+zone_tuple_network        = ProtoField.uint16("aurp.zone_tuple.network", "Network number")
 zone_tuple_long           = ProtoField.bool("aurp.zone_tuple.long", "Long tuple", 8, flag_text_set, 0x80)
 zone_tuple_name_len       = ProtoField.uint8("aurp.zone_tuple.name_len", "Zone name length", nil, nil, 0x7F)
 zone_tuple_name           = ProtoField.string("aurp.zone_tuple.name", "Name", base.ASCII)
@@ -116,11 +122,19 @@ aurp_protocol.fields = {
 
   aurp_ri_rsp,
   network_tuple,
-  network_tuple_network_number,
+  network_tuple_network,
   network_tuple_range_flag,
   network_tuple_distance,
-  network_tuple_range_start,
-  network_tuple_range_end,
+  network_tuple_network_range_end,
+
+  aurp_ri_upd,
+  network_event_tuple,
+  network_event_tuple_code,
+  network_event_tuple_network,
+  network_event_range_flag,
+  network_event_tuple_distance,
+  network_event_tuple_range_start,
+  network_event_tuple_range_end,
 
   aurp_router_down,
   aurp_router_down_error_code,
@@ -129,7 +143,7 @@ aurp_protocol.fields = {
   aurp_zone_info_subcode,
   aurp_zone_info_rsp_num_tuples,
   zone_tuple,
-  zone_tuple_network_number,
+  zone_tuple_network,
   zone_tuple_long,
   zone_tuple_name_len,
   zone_tuple_name,
@@ -263,27 +277,69 @@ function parse_command_ri_rsp(buffer, tree)
   end
   local c = 0
   while c < buffer:len() do
-    local ranged = bit32.extract(buffer(c + 2, 1):uint(), 7) ~= 0
-    local tuple_tree
-    if ranged then
-      tuple_tree = subtree:add(network_tuple, buffer(c, 6))
-      tuple_tree:add(network_tuple_range_start, buffer(c, 2))
-      tuple_tree:add(network_tuple_range_end, buffer(c + 3, 2))
-      local n_start = buffer(c, 2):uint()
-      local n_end = buffer(c + 3, 2):uint()
-      tuple_tree:append_text(string.format(" range %d-%d ($%04x-$%04x)", n_start, n_end, n_start, n_end))
-    else
-      tuple_tree = subtree:add(network_tuple, buffer(c, 3))
-      tuple_tree:add(network_tuple_network_number, buffer(c, 2))
-      local n_number = buffer(c, 2):uint()
-      tuple_tree:append_text(string.format(" %d ($%04x)", n_number, n_number))
-    end
+    local tuple_tree = subtree:add(network_tuple, buffer(c))
+    local net_number = buffer(c, 2):uint()
+    tuple_tree:add(network_tuple_network, buffer(c, 2))
+    local is_range = bit32.extract(buffer(c + 2, 1):uint(), 7) ~= 0
     tuple_tree:add(network_tuple_range_flag, buffer(c + 2, 1))
     tuple_tree:add(network_tuple_distance, buffer(c + 2, 1))
-    if ranged then
-      c = c + 6  -- there is an extra null byte after the range end
+    if is_range then
+      local net_range_end = buffer(c + 3, 2):uint()
+      tuple_tree:add(network_tuple_network_range_end, buffer(c + 3, 2))
+      tuple_tree:append_text(string.format(" range %d-%d ($%04x-$%04x)",
+        net_number, net_range_end, net_number, net_range_end))
+      -- there is an extra null byte after the range end
+      tuple_tree:set_len(6)
+      c = c + 6
     else
+      tuple_tree:append_text(string.format(" %d ($%04x)", net_number, net_number))
+      tuple_tree:set_len(3)
       c = c + 3
+    end
+  end
+end
+
+function network_event_code(c)
+  if c == 0 then
+    return "Null"
+  elseif c == 1 then
+    return "Network Added"
+  elseif c == 2 then
+    return "Network Deleted"
+  elseif c == 3 then
+    return "Network Route Change"
+  elseif c == 4 then
+    return "Network Distance Change"
+  elseif c == 5 then
+    return "Zone Change"
+  else
+    return "Unknown"
+  end
+end
+
+function parse_command_ri_upd(buffer, tree)
+  local subtree = tree:add(aurp_ri_upd, buffer)
+  local c = 0
+  while c < buffer:len() do
+    local tuple_tree = subtree:add(network_event_tuple, buffer(c))
+    local code = buffer(c, 1):uint()
+    tuple_tree:add(network_event_tuple_code, buffer(c, 1)):append_text(" (" .. network_event_code(code) .. ")")
+    local net_number = buffer(c + 1, 2):uint()
+    tuple_tree:add(network_event_tuple_network, buffer(c + 1, 2))
+    local is_range = bit32.extract(buffer(c + 3, 1):uint(), 7) ~= 0
+    tuple_tree:add(network_event_tuple_range_flag, buffer(c + 3, 1))
+    tuple_tree:add(network_event_tuple_distance, buffer(c + 3, 1))
+    if is_range then
+      tuple_tree:add(network_event_tuple_range_end, buffer(c + 4, 2))
+      local net_range_end = buffer(c + 4, 2):uint()
+      tuple_tree:append_text(string.format(" range %d-%d ($%04x-$%04x)",
+        net_number, net_range_end, net_number, net_range_end))
+      tuple_tree:set_len(6)
+      c = c + 6
+    else
+      tuple_tree:append_text(string.format(" %d ($%04x)", net_number, net_number))
+      tuple_tree:set_len(4)
+      c = c + 4
     end
   end
 end
@@ -313,9 +369,9 @@ function parse_command_zone_info_rsp(buffer, tree)
         len = 4
       end
       local tuple_tree = subtree:add(zone_tuple, buffer(c, len))
-      tuple_tree:add(zone_tuple_network_number, buffer(c, 2))
-      local zone_network_number = buffer(c, 2):uint()
-      tuple_tree:append_text(string.format(" %d ($%04x) - ", zone_network_number, zone_network_number))
+      tuple_tree:add(zone_tuple_network, buffer(c, 2))
+      local zone_network = buffer(c, 2):uint()
+      tuple_tree:append_text(string.format(" %d ($%04x) - ", zone_network, zone_network))
       tuple_tree:add(zone_tuple_long, buffer(c + 2, 1))
 
       if long then
@@ -428,6 +484,8 @@ function aurp_protocol.dissector(buffer, pinfo, tree)
   if command == 2 then
     parse_command_ri_rsp(buffer(c), subtree)
   -- command 3 is RI-Ack (no subfields)
+  elseif command == 4 then
+    parse_command_ri_upd(buffer(c), subtree)
   elseif command == 5 then
     parse_command_router_down(buffer(c), subtree)
   elseif command == 6 then
