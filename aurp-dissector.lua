@@ -297,7 +297,7 @@ function parse_network_tuple(buffer, tree, is_event)
       -- Null events contain no data
       return 1
     end
-    tuple_tree.add(network_tuple_event_code, buffer(0, 1))
+    tuple_tree:add(network_tuple_event_code, buffer(0, 1))
     buffer = buffer(1)
   end
   local net_number = buffer(0, 2):uint()
