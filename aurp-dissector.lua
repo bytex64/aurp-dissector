@@ -302,7 +302,7 @@ function parse_network_tuple(buffer, tree, is_event)
   end
   local net_number = buffer(0, 2):uint()
   tuple_tree:add(network_tuple_network, buffer(0, 2))
-  local is_range = bit32.extract(buffer(2, 1):uint(), 7) ~= 0
+  local is_range = buffer(2, 1):uint() & 0x80 ~= 0
   tuple_tree:add(network_tuple_range_flag, buffer(2, 1))
   tuple_tree:add(network_tuple_distance, buffer(2, 1))
   if is_range then
@@ -422,7 +422,7 @@ end
 function parse_zone_name_list(buffer, tree, c)
   local len
   local f3 = buffer(c + 2, 1):uint()
-  local long = bit32.extract(f3, 7) == 0
+  local long = f3 & 0x80 == 0
   if long then
     len = f3 + 3
   else
@@ -441,7 +441,7 @@ function parse_zone_name_list(buffer, tree, c)
     tuple_tree:append_text(zone_name)
   else
     tuple_tree:add(zone_tuple_name_offset, buffer(c + 2, 2))
-    local offset = bit32.band(buffer(c + 2, 2):uint(), 0x7FFF)
+    local offset = buffer(c + 2, 2):uint() & 0x7FFF
     -- offset is from the length byte of the first zone, which should be 6 bytes in
     -- 2 bytes subcode, 2 bytes number of tuples, 2 bytes network number of first zone
     local zone_name_length = buffer(6 + offset, 1):uint()
